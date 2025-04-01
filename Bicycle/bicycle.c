@@ -13,16 +13,13 @@ sem_t box_slots;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 int totFrames, totWheels; 
 
-enum Last_Fetch {FRAME, WHEEL, NONE};
-enum Last_Fetch lastFetch = NONE;
-
 void *frame_producer(void *arg) {
     int id = *(int *)arg; //this indicate the id for current frame producer
     while (1) {
         if(totFrames < M){
             sem_wait(&box_slots); // wait for an empty slot, and don't release here            
             pthread_mutex_lock(&boxMutex);
-            if(box.n_frames == N-2 || lastFetch == WHEEL){
+            if(box.n_frames == N-2){
                 pthread_mutex_unlock(&boxMutex);
                 sem_post(&box_slots); // release one slot for wheel
                 continue;
@@ -48,7 +45,7 @@ void *wheel_producer(void *arg) {
         if(totWheels < 2*M){
             sem_wait(&box_slots); // wait for an empty slot, and don't release here
             pthread_mutex_lock(&boxMutex);
-            if(box.n_wheels == N-1 || lastFetch == FRAME){
+            if(box.n_wheels == N-1){
                 pthread_mutex_unlock(&boxMutex);
                 sem_post(&box_slots); // release one slot for frame
                 continue;
@@ -81,7 +78,6 @@ void *assembler(void *arg) {
             pthread_cond_wait(&cond, &boxMutex);   
         }
         get_frame(id, &box);
-        lastFetch = FRAME;
         sem_post(&box_slots); // release one slot for frame
         pthread_mutex_unlock(&boxMutex);
 
@@ -91,7 +87,6 @@ void *assembler(void *arg) {
             pthread_cond_wait(&cond, &boxMutex);
         }
         get_wheels(id, &box);
-        lastFetch = WHEEL;
         for(int i=0;i<2;i++)
             sem_post(&box_slots); // release two slots for wheels
         pthread_mutex_unlock(&boxMutex);
@@ -103,7 +98,6 @@ void *assembler(void *arg) {
 }
 
 void init() {
-    lastFetch = NONE;
     pthread_mutex_init(&boxMutex, NULL);
     sem_init(&box_slots, false, N);
     totFrames =totWheels =0;
